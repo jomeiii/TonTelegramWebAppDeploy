@@ -1,40 +1,41 @@
-from config import SHORT_NAMEGAME, TOKEN
-
-from flask import Flask
-from telegram import Update, Bot
-from telegram.ext import CommandHandler, CallbackQueryHandler, InlineQueryHandler, Application
+from config import TOKEN
+from quart import Quart, jsonify
+from telegram import Bot
 import os
-import asyncio
 
-queries = {}
-
-app = Flask(__name__, static_folder='TonTelegramWebAppDeploy')
-
+app = Quart(__name__)
 bot = Bot(token=TOKEN)
 
-async def start_game(update: Update, context):
-    await update.message.reply_game(SHORT_NAMEGAME)
+@app.route('/user/<int:user_id>', methods=['GET'])
+async def get_user_info(user_id):
+    try:
+        user = await bot.get_chat(user_id)
+        
+        user_photos = await bot.get_user_profile_photos(user_id)
+        
+        avatar_url = None
+        if user_photos.total_count > 0:
+            file_id = user_photos.photos[0][0].file_id
+            file = await bot.get_file(file_id)
+            avatar_url = f"https://api.telegram.org/file/bot{TOKEN}/{file.file_path}"
+        
+        user_info = {
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'username': user.username,
+            'avatar_url': avatar_url
+        }
 
+        return jsonify(user_info)
 
-async def callback_query_handler(update: Update, context):
-    query = update.callback_query
-    if query.game_short_name != SHORT_NAMEGAME:
-        await bot.answer_callback_query(query.id, text=f"Sorry, '{query.game_short_name}' is not available.")
-    else:
-        queries[query.id] = query
-        game_url = f"https://jomeiii.github.io/TonTelegramWebAppDeploy/?user_id={update.effective_user.id}"
-        await bot.answer_callback_query(
-            callback_query_id=query.id,
-            url=game_url
-        )
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    updater = Application.builder().token(token=TOKEN).build()
-    updater.add_handler(CommandHandler("start", start_game))
-    updater.add_handler(CommandHandler("game", start_game))
-    updater.add_handler(CallbackQueryHandler(callback_query_handler))
-    asyncio.run(updater.run_polling())
+    except Exception as e:
+        return jsonify({'error': str(e)}), 400
     
-    app.run(port=port)
+
+@app.route('/token', methods=['GET'])
+def get_bot_token():
+    return TOKEN
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
