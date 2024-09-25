@@ -1,10 +1,12 @@
 from config import TOKEN
 from quart import Quart, jsonify
+from quart_cors import cors
 from telegram import Bot
 import os
 
 app = Quart(__name__)
 bot = Bot(token=TOKEN)
+app = cors(app, allow_origin="*") 
 
 @app.route('/user/<int:user_id>', methods=['GET'])
 async def get_user_info(user_id):
